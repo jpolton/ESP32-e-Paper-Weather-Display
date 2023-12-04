@@ -1,6 +1,6 @@
 Modifications to parent respository include
 <img width="1081" alt="Screenshot 2023-11-18 at 20 33 03" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/42e3b4b5-282e-4311-ad63-d12a3fd8a248">
-
+**update** units in temperature box "deg C" or "deg F" modified so degree symbol is only in the inset box (image not updated)
 
 
 # Original Readme
