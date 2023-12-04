@@ -227,19 +227,19 @@ void DisplayTemperatureSection(int x, int y, int twidth, int tdepth) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y + 5, TXT_TEMPERATURES, CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 3, y + 82, String(WxConditions[0].High, 0) + "° | " + String(WxConditions[0].Low, 0) + "°", CENTER); // Show forecast high and Low
+  drawString(x + 3, y + 82, String(WxConditions[0].High, 0) + " | " + String(WxConditions[0].Low, 0), CENTER); // Show forecast high and Low
   
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x + 33, y + 38, "Feels:", LEFT);                                   // Show feels-like temperature
   u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-  drawString(x + 33, y + 53, String(WxConditions[0].Feelslike, 0) + "°", LEFT); // Show feels-like temperature
+  drawString(x + 33, y + 53, String(WxConditions[0].Feelslike, 0), LEFT); // Show feels-like temperature
 
   u8g2Fonts.setFont(u8g2_font_helvB24_tf);
-  drawString(x - 22, y + 53, String(WxConditions[0].Temperature, 1) + "°", CENTER); // Show current Temperature
+  drawString(x - 22, y + 53, String(WxConditions[0].Temperature, 1), CENTER); // Show current Temperature
 
   display.drawRect(x + 33, y + 78, 41, 21, GxEPD_BLACK); // Units in corner box
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x + 52, y + 83, (Units == "M" ? "C" : "F"), CENTER); 
+  drawString(x + 52, y + 83, (Units == "M" ? "°C" : "°F"), CENTER);
 }
 //#########################################################################################
 void DisplayForecastTextSection(int x, int y , int fwidth, int fdepth) {
