@@ -1015,6 +1015,11 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
     Y1Max = round(maxYscale + 0.5 + auto_scale_margin); // Auto scale the graph and round to the nearest value defined, default was Y1Max
     if (minYscale != 0) minYscale = round(minYscale - 0.5 - auto_scale_margin); // Auto scale the graph and round to the nearest value defined, default was Y1Min
     Y1Min = round(minYscale);
+
+    if ((Y1Max - Y1Min == 1) && (Y1Max - maxYscale > 0.5)) {  // if smallest integer y-range (i.e 1) and data nearer lower x-axis, shift to make space for labels
+      Y1Max = Y1Max - 0.5;
+      Y1Min = Y1Min - 0.5;
+    }
   }
   // Set x-limits time as now and now-24hrs
   X1Max = NowUnixTime();
@@ -1075,7 +1080,7 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
     if (lhs_flag) {  // Draw left hand y-axis labels
 
       if ((float)(Y1Max - Y1Min) < 3) {
-        drawString(x_pos - 1, y_pos + gheight * spacing / y_minor_axis - 5, String((Y1Max - (float)(Y1Max - Y1Min) / y_minor_axis * spacing + 0.01), 2), RIGHT);
+        drawString(x_pos - 1, y_pos + gheight * spacing / y_minor_axis - 5, String((Y1Max - (float)(Y1Max - Y1Min) / y_minor_axis * spacing + 0.001), 2), RIGHT);
       }
       else
       {
@@ -1088,7 +1093,7 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
     { 
 
       if ((float)(Y1Max - Y1Min) < 3) {
-        drawString(x_pos + gwidth + 5, y_pos + gheight * spacing / y_minor_axis - 5, String((Y1Max - (float)(Y1Max - Y1Min) / y_minor_axis * spacing + 0.01), 2), LEFT);
+        drawString(x_pos + gwidth + 5, y_pos + gheight * spacing / y_minor_axis - 5, String((Y1Max - (float)(Y1Max - Y1Min) / y_minor_axis * spacing + 0.001), 2), LEFT);
       }
       else
       {
