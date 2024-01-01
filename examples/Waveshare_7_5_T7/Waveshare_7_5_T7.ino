@@ -169,7 +169,7 @@ void BeginSleep() {
 //#########################################################################################
 void DisplayWeather() {                        // 7.5" e-paper display is 800x480 resolution
   DisplayGeneralInfoSection();                 // Top line of the display
-  DisplayDisplayWindSection(108, 146, WxConditions[0].Winddir, WxConditions[0].Windspeed, 81);
+  //DisplayDisplayWindSection(108, 146, WxConditions[0].Winddir, WxConditions[0].Windspeed, 81);
   DisplayMainWeatherSection(300, 100);          // Centre section of display for Location, temperature, Weather report, current Wx Symbol and wind direction
   DisplayForecastSection(217, 245);            // 3hr forecast boxes
   DisplayAstronomySection(0, 245);             // Astronomy section Sun rise/set, Moon phase and Moon icon
@@ -200,7 +200,8 @@ void DisplayGeneralInfoSection() {
 void DisplayMainWeatherSection(int x, int y) {
   //  display.drawRect(x-67, y-65, 140, 182, GxEPD_BLACK);
   display.drawLine(0, 38, SCREEN_WIDTH - 3, 38,  GxEPD_BLACK);
-  DisplayConditionsSection(x + 3, y + 49, WxConditions[0].Icon, LargeIcon);
+  DisplayConditionsSection(86, 149, WxConditions[0].Icon, LargeIcon);
+  DisplayDisplayWindSectionSmall(x + 20, y - 81, WxConditions[0].Winddir, WxConditions[0].Windspeed, 137, 100);
   DisplayTemperatureSection(x + 154, y - 81, 137, 100);
   DisplayPressureSection(x + 281, y - 81, WxConditions[0].Pressure, WxConditions[0].Trend, 137, 100);
   DisplayPrecipitationSection(x + 411, y - 81, 137, 100);
@@ -243,6 +244,27 @@ void DisplayDisplayWindSection(int x, int y, float angle, float windspeed, int C
   drawString(x - 12, y - 3, String(windspeed, 1), CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y + 12, (Units == "M" ? "m/s" : "mph"), CENTER);
+}
+//#########################################################################################
+void DisplayDisplayWindSectionSmall(int x, int y, float angle, float windspeed, int wwidth, int wdepth) {
+//No circle radius - we want the arrow to rotate about a spot...
+#define Cradius 0
+  display.drawRect(x - 63, y - 1, wwidth, wdepth, GxEPD_BLACK); // wind outline
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(x, y + 5, TXT_WIND_SPEED_DIRECTION, CENTER);
+  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+  drawString(x + 3, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction
+
+  u8g2Fonts.setFont(u8g2_font_helvB24_tf);
+  drawString(x - 22, y + 53, String(windspeed, 1), CENTER); // Show current wind speed
+
+  display.drawRect(x + 33, y + 78, 41, 21, GxEPD_BLACK); // Units in corner box
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(x + 52, y + 83, String(Units == "M" ? " m/s" : " mph"), CENTER);
+
+  float dx = Cradius * cos((angle - 90) * PI / 180) + x; // calculate X position
+  float dy = Cradius * sin((angle - 90) * PI / 180) + y; // calculate Y position
+  arrow(x+2, y, Cradius - 3, angle, 10, 20); // Show wind direction as just an arrow
 }
 //#########################################################################################
 String WindDegToDirection(float winddirection) {
