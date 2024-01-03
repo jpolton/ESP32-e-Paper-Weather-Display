@@ -251,12 +251,12 @@ void DisplayDisplayWindSectionSmall(int x, int y, float angle, float windspeed, 
 #define Cradius 0
   display.drawRect(x - 63, y - 1, wwidth, wdepth, GxEPD_BLACK); // wind outline
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x, y + 5, TXT_WIND_SPEED_DIRECTION, CENTER);
+  drawString(x, y + 5, "Wind", CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 3, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction
+  drawString(x + 3, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction as txt
 
   u8g2Fonts.setFont(u8g2_font_helvB24_tf);
-  drawString(x - 22, y + 53, String(windspeed, 1), CENTER); // Show current wind speed
+  drawString(x - 22, y + 53, String(windspeed, 1), CENTER); // Show current wind speed as float
 
   display.drawRect(x + 33, y + 78, 41, 21, GxEPD_BLACK); // Units in corner box
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
@@ -264,7 +264,7 @@ void DisplayDisplayWindSectionSmall(int x, int y, float angle, float windspeed, 
 
   float dx = Cradius * cos((angle - 90) * PI / 180) + x; // calculate X position
   float dy = Cradius * sin((angle - 90) * PI / 180) + y; // calculate Y position
-  arrow(x+2, y, Cradius - 3, angle, 10, 20); // Show wind direction as just an arrow
+  arrow(x - 3, y + 82, Cradius - 3, angle, 10, 20); // Show wind direction as just an arrow
 }
 //#########################################################################################
 String WindDegToDirection(float winddirection) {
