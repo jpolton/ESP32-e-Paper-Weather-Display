@@ -9,6 +9,7 @@ const char* password = "your_PASSWORD"; // WiFi password needed for the SSID
 String apikey       = "your_API_key";                      // See: https://openweathermap.org/  // It's free to get an API key, but don't take more than 60 readings/minute!
 const char server[] = "api.openweathermap.org";
 const char server_ea[] = "environment.data.gov.uk";
+const char server_noc[] = "apps.noc-innovations.co.uk"; // NB this is hardwired into obtain_noc_https_data(), as I couldn't figure out the variable substitution...
 //http://api.openweathermap.org/data/2.5/weather?q=Melksham,UK&APPID=your_OWM_API_key&mode=json&units=metric&cnt=1   // Example API call for weather data
 //http://api.openweathermap.org/data/2.5/forecast?q=Melksham,UK&APPID=your_OWM_API_key&mode=json&units=metric&cnt=40 // Example API call for forecast data
 //Set your location according to OWM locations
@@ -28,6 +29,12 @@ const char* ntpServer   = "0.uk.pool.ntp.org";             // Or, choose a time 
                                                            // EU "0.europe.pool.ntp.org"
                                                            // US "0.north-america.pool.ntp.org"
                                                            // See: https://www.ntppool.org/en/                                                           
+
+// NOC API key - for tidal harmonics
+String noc_api_key = "your api key";
+String gauge_forecast_id_lhs = "Liverpool%20(Gladstone%20Dock)";
+float datum_shift = 5.249; // fitted to an HT 12Jan24 5.32; // anyTide 5.249 //  datum shift (metres) added to harmonic data retrieve from noc api.
+
 int   gmtOffset_sec     = 0;    // UK normal time is GMT, so GMT Offset is 0, for US (-5Hrs) is typically -18000, AU is typically (+8hrs) 28800
 int  daylightOffset_sec = 3600; // In the UK DST is +1hr or 3600-secs, other countries may use 2hrs 7200 or 30-mins 1800 or 5.5hrs 19800 Ahead of GMT use + offset behind - offset
 
