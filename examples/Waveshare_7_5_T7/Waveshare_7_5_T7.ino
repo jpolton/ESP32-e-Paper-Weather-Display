@@ -22,6 +22,9 @@
 #include <WiFi.h>                     // Built-in
 #include "time.h"                     // Built-in
 #include <SPI.h>                      // Built-in 
+#include <esp_crt_bundle.h>
+#include <WiFiClientSecure.h>
+#include <ssl_client.h>
 #define  ENABLE_GxEPD2_display 1
 #include <GxEPD2_BW.h>
 //#include <GxEPD2_3C.h>
@@ -88,11 +91,13 @@ long    StartTime = 0;
 
 #define max_readings 24
 #define max_gauge_readings 96
+#define max_harmo_readings 288
 
 Forecast_record_type  WxConditions[1];
 Forecast_record_type  WxForecast[max_readings];
 Gauge_record_type     LhsGauge[max_gauge_readings];
 Gauge_record_type     RhsGauge[max_gauge_readings];
+Gauge_record_type     LhsForecast[max_harmo_readings];
 
 #include "common.h"
 
@@ -102,11 +107,16 @@ Gauge_record_type     RhsGauge[max_gauge_readings];
 #define barchart_off  false
 #define lhs_yaxis     true
 #define rhs_yaxis     false
+#define line_on       true
+#define line_off      false
+
+float g_lhs_forecast[max_harmo_readings] = {0};
+long  g_lhs_ftimings[max_harmo_readings] = {0}; // Liverpool harmonic tide
 
 float g_lhs_readings[max_gauge_readings] = {0};
-long  g_lhs_timings[max_gauge_readings]  = {0}; // Liverpool
+long  g_lhs_timings[max_gauge_readings]  = {0}; // Liverpool measured levels
 float g_rhs_readings[max_gauge_readings] = {0};
-long  g_rhs_timings[max_gauge_readings]  = {0}; // Southampton
+long  g_rhs_timings[max_gauge_readings]  = {0}; // Southampton measured levels
 
 float pressure_readings[max_readings]    = {0};
 float temperature_readings[max_readings] = {0};
@@ -127,8 +137,9 @@ void setup() {
     if ((CurrentHour >= WakeupTime && CurrentHour <= SleepTime) || DebugDisplayUpdate) {
       InitialiseDisplay(); // Give screen time to initialise by getting weather data!
       byte Attempts = 1;
-      bool RxWeather = false, RxForecast = false, RxGaugeLhs = false, RxGaugeRhs = false;
-      WiFiClient client;   // wifi client object
+      bool RxWeather = false, RxForecast = false, RxGaugeLhs = false, RxGaugeRhs = false, RxHarmonicLhs = false;
+      WiFiClient client;   // wifi client object for HTTP
+
       while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
         if (RxWeather  == false) RxWeather  = obtain_wx_data(client, "weather");
         if (RxForecast == false) RxForecast = obtain_wx_data(client, "forecast");
@@ -139,8 +150,15 @@ void setup() {
         if (RxGaugeLhs  == false) RxGaugeLhs = obtain_ea_data(client, "tide", gauge_id_lhs);
         if (RxGaugeRhs  == false) RxGaugeRhs = obtain_ea_data(client, "river", gauge_id_rhs);
         Attempts++;
+      }
+      Attempts = 1; // reset
+      WiFiClientSecure client_https;   // wifi client object for HTTPS
+      client_https.setInsecure();
+      while ((RxHarmonicLhs == false) && Attempts <= 2) { // Try up-to 2 time for forecast (harmonic) data
+        if (RxHarmonicLhs  == false) RxHarmonicLhs = obtain_noc_https_data(client_https, "harmonic", gauge_forecast_id_lhs);
+        Attempts++;
       }      
-      if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs) { // Only proceed if received all Weather, Forecast and both Gauge data
+      if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs && RxHarmonicLhs) { // Only proceed if received all Weather, Forecast, both Gauge data and harmonic data
         StopWiFi(); // Reduces power consumption
         DisplayWeather();
         display.display(false); // Full screen update mode
@@ -171,8 +189,8 @@ void DisplayWeather() {                        // 7.5" e-paper display is 800x48
   DisplayGeneralInfoSection();                 // Top line of the display
   //DisplayDisplayWindSection(108, 146, WxConditions[0].Winddir, WxConditions[0].Windspeed, 81);
   DisplayMainWeatherSection(300, 100);          // Centre section of display for Location, temperature, Weather report, current Wx Symbol and wind direction
-  DisplayForecastSection(217, 245);            // 3hr forecast boxes
-  DisplayAstronomySection(0, 245);             // Astronomy section Sun rise/set, Moon phase and Moon icon
+  DisplayForecastSection(217, 245+25);            // 3hr forecast boxes
+  DisplayAstronomySection(0, 245+25);             // Astronomy section Sun rise/set, Moon phase and Moon icon
   //DisplayStatusSection(690, 215, wifi_signal); // Wi-Fi signal strength and Battery voltage
   DisplayStatusSection(SCREEN_WIDTH * 5 / 6, 3, wifi_signal); // Wi-Fi signal strength and Battery voltage
 }
@@ -206,7 +224,7 @@ void DisplayMainWeatherSection(int x, int y) {
   DisplayPressureSection(x + 281, y - 81, WxConditions[0].Pressure, WxConditions[0].Trend, 137, 100);
   DisplayPrecipitationSection(x + 411, y - 81, 137, 100);
   //DisplayForecastTextSection(x + 97, y + 20, 409, 65);
-  DisplayGaugeSection(x + 97, y + 20, 409-20, 65 + 61 + 10);
+  DisplayGaugeSection(x - 109, y + 20, 409-20+97+109, 65 + 61 + 10+20);
 }
 //#########################################################################################
 void DisplayDisplayWindSection(int x, int y, float angle, float windspeed, int Cradius) {
@@ -253,7 +271,8 @@ void DisplayDisplayWindSectionSmall(int x, int y, float angle, float windspeed, 
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y + 5, "Wind", CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 3, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction as txt
+  //drawString(x + 3, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction as txt
+  drawString(x - 22, y + 82, WindDegToDirection(angle), CENTER); // Show wind direction as txt
 
   u8g2Fonts.setFont(u8g2_font_helvB24_tf);
   drawString(x - 22, y + 53, String(windspeed, 1), CENTER); // Show current wind speed as float
@@ -264,7 +283,8 @@ void DisplayDisplayWindSectionSmall(int x, int y, float angle, float windspeed, 
 
   float dx = Cradius * cos((angle - 90) * PI / 180) + x; // calculate X position
   float dy = Cradius * sin((angle - 90) * PI / 180) + y; // calculate Y position
-  arrow(x - 3, y + 82, Cradius - 3, angle, 10, 20); // Show wind direction as just an arrow
+  //arrow(x - 3, y + 82, Cradius - 3, angle, 10, 20); // Show wind direction as just an arrow. Rotate about point off tip
+  arrow(x + 52, y + 53, Cradius - 28, angle, 10, 20); // Show wind direction as just an arrow. Rotate about its centre
 }
 //#########################################################################################
 String WindDegToDirection(float winddirection) {
@@ -305,14 +325,32 @@ void DisplayGaugeSection(int x, int y , int fwidth, int fdepth) {
     g_lhs_timings[r] =   LhsGauge[r].Timestamp;
     r++;
   } while (r < max_gauge_readings);
+  r = 0;
+  do {
+    g_lhs_forecast[r] = LhsForecast[r].Waterlevel;
+    g_lhs_ftimings[r] = LhsForecast[r].Timestamp;
+    r++;
+  } while (r < max_harmo_readings);
+    
+  // Determined shared y-limits
+  float ymin = SetYScaleFromTwoTimeseries(g_lhs_readings, g_lhs_forecast, max_gauge_readings, max_harmo_readings, false); // boolean max_flag: true->max, false->min
+  float ymax = SetYScaleFromTwoTimeseries(g_lhs_readings, g_lhs_forecast, max_gauge_readings, max_harmo_readings, true); // boolean max_flag: true->max, false->min
+
+  // Draw timeseries graphs
+  /////////////////////////
+  String title = gauge_label_lhs+" / "+gauge_label_rhs+" (m)";
   int gwidth = fwidth - 30, gheight = fdepth - 40;
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  // (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode)
-  String title = gauge_label_lhs+" / "+gauge_label_rhs+" (m)";
-  DrawWaterLevelGraph(x + 16, y + 12, gwidth, gheight, 0, 10, title, g_lhs_readings, g_lhs_timings, max_gauge_readings, autoscale_on, barchart_off, lhs_yaxis);
-  DrawWaterLevelGraph(x + 16, y + 12, gwidth, gheight, 0, 10, title, g_rhs_readings, g_rhs_timings, max_gauge_readings, autoscale_on, barchart_off, rhs_yaxis);
+  
+  // Draw timeseries from EA
+  // (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode, LineMode, AxisSide)
+  DrawWaterLevelGraph(x + 16, y + 12, gwidth, gheight, ymin, ymax, title, g_lhs_readings, g_lhs_timings, max_gauge_readings, autoscale_off, barchart_off, line_on, lhs_yaxis);
+  DrawWaterLevelGraph(x + 16, y + 12, gwidth, gheight, 0,    10,   title, g_rhs_readings, g_rhs_timings, max_gauge_readings, autoscale_on, barchart_off, line_on, rhs_yaxis);
 
+  // Draw harmonic data
+  // (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode, LineMode, AxisSide)
+  DrawWaterLevelGraph(x + 16, y + 12, gwidth, gheight, ymin, ymax, title, g_lhs_forecast, g_lhs_ftimings, max_harmo_readings, autoscale_off, barchart_off, line_off, lhs_yaxis);  
 }
 //#########################################################################################
 void DisplayForecastTextSection(int x, int y , int fwidth, int fdepth) {
@@ -473,7 +511,8 @@ void DisplayForecastSection(int x, int y) {
   int gy = 375;
   int gap = gwidth + gx;
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(SCREEN_WIDTH / 2, gy - 40, TXT_FORECAST_VALUES, CENTER); // Based on a graph height of 60
+  //drawString(SCREEN_WIDTH / 2, gy - 40, TXT_FORECAST_VALUES, CENTER); // Based on a graph height of 60
+  drawString(SCREEN_WIDTH / 2, gy + gheight + 20, "3 Day Forecast", CENTER); // Based on a graph height of 60
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   // (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode)
   DrawGraph(gx + 0 * gap, gy, gwidth, gheight, 900, 1050, Units == "M" ? TXT_PRESSURE_HPA : TXT_PRESSURE_IN, pressure_readings, max_readings, autoscale_on, barchart_off, lhs_yaxis);
@@ -947,7 +986,7 @@ void DrawGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1Min, float
   int last_x, last_y;
   float x2, y2;
   if (auto_scale == true) {
-    for (int i = 1; i < readings; i++ ) {
+    for (int i = 0; i < readings; i++ ) {
       if (DataArray[i] >= maxYscale) maxYscale = DataArray[i];
       if (DataArray[i] <= minYscale) minYscale = DataArray[i];
     }
@@ -1016,7 +1055,39 @@ void DrawGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1Min, float
 }
 
 //#########################################################################################
-void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1Min, float Y1Max, String title, float DataArray[], long TimeArray[], int readings, boolean auto_scale, boolean barchart_mode, boolean lhs_flag) {
+float SetYScaleFromTwoTimeseries(float DataArray1[], float DataArray2[], int readings1, int readings2, boolean max_flag) {
+// When plotting two lines with the same y-axis need to specify the ylimits, as auto scaling does not work for two timeseries
+#define auto_scale_margin 0 // Sets the autoscale increment, so axis steps up in units of e.g. 3
+  float maxYscale = -10000;
+  float minYscale =  10000;
+  float Y1Max = 0;
+  float Y1Min = 0;
+  for (int i = 0; i < readings1; i++ ) {
+    if (DataArray1[i] >= maxYscale) maxYscale = DataArray1[i];
+    if (DataArray1[i] <= minYscale) minYscale = DataArray1[i];
+  }
+  for (int i = 0; i < readings2; i++ ) {
+    if (DataArray2[i] >= maxYscale) maxYscale = DataArray2[i];
+    if (DataArray2[i] <= minYscale) minYscale = DataArray2[i];
+  }
+  //maxYscale = round(maxYscale + auto_scale_margin); // Auto scale the graph and round to the nearest value defined, default was Y1Max
+  Y1Max = round(maxYscale + 0.5 + auto_scale_margin); // Auto scale the graph and round to the nearest value defined, default was Y1Max
+  if (minYscale != 0) minYscale = round(minYscale - 0.5 - auto_scale_margin); // Auto scale the graph and round to the nearest value defined, default was Y1Min
+  Y1Min = round(minYscale);
+
+  if (max_flag) {
+    Serial.println("max val=" + String(maxYscale) + ": Ymax=" + String(Y1Max) );
+    return Y1Max;
+    }
+  else {
+    Serial.println("min val=" + String(minYscale) + ": Ymin=" + String(Y1Min) );
+    return Y1Min;
+    }
+}
+//#########################################################################################
+void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1Min, float Y1Max, String title, float DataArray[], long TimeArray[], int readings, boolean auto_scale, boolean barchart_mode, boolean line_mode, boolean lhs_flag) {
+// (x,y,width,height,MinValue, MaxValue, Title, Data Array, AutoScale, ChartMode, LineMode, AxisSide)
+// Data streams are ordered to be increasing time with index
 #define auto_scale_margin 0 // Sets the autoscale increment, so axis steps up in units of e.g. 3
 #define y_minor_axis 4      // 4-1 y-axis division markers
 #define number_of_dashes_across 100 // dashes for y=constant guides
@@ -1029,7 +1100,7 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
   float x2, y2;
   String xlab;
   if (auto_scale == true) {
-    for (int i = 1; i < readings; i++ ) {
+    for (int i = 0; i < readings; i++ ) {
       if (DataArray[i] >= maxYscale) maxYscale = DataArray[i];
       if (DataArray[i] <= minYscale) minYscale = DataArray[i];
     }
@@ -1043,26 +1114,43 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
       Y1Min = Y1Min - 0.5;
     }
   }
-  // Set x-limits time as now and now-24hrs
-  X1Max = NowUnixTime();
-  dX = 24*60*60;  // 24hrs in minutes. Needs to be consistent with "#define max_gauge_readings 96", where 24*4=96
-  X1Min = X1Max - dX;
-  
+  // Set x-limits time as now+24hrs and now-24hrs
+  dX = 24*60*60;  // 24hrs in minutes. Needs to be consistent with "#define max_gauge_readings 96", where 24*4=96, and max_harmonic_readings=288, 3 days of 15min data
+  X1Max = NowUnixTime() + dX;
+  X1Min = X1Max - 2*dX;
+
+  // constrain values to be within time bounds
+  for (int i = readings-1; i >= 0; i-- ) {
+    if (TimeArray[i] <= X1Min) { 
+      TimeArray[i] = X1Min;
+      DataArray[i] = DataArray[i+1];
+    }
+  }
   // Draw the graph
   display.drawRect(x_pos, y_pos, gwidth + 3, gheight + 2, GxEPD_BLACK);
   drawString(x_pos + gwidth / 2, y_pos - 13, title, CENTER);
   // Draw the data
-  last_x = x_pos + (TimeArray[0] - X1Min) * gwidth / dX;
-  last_y = y_pos + (Y1Max - constrain(DataArray[0], Y1Min, Y1Max)) / (Y1Max - Y1Min) * gheight;
+  last_x = x_pos + (TimeArray[0] - X1Min) * gwidth / (2*dX);
+  last_y = y_pos + (Y1Max - constrain(DataArray[0],  Y1Min, Y1Max)) / (Y1Max - Y1Min) * gheight;
   for (int gx = 1; gx < readings; gx++) {
     if ((TimeArray[gx] >= X1Min) && (TimeArray[gx] <= X1Max)) { // Only draw if in [X1Min,X1Max] bounds
       y2 = y_pos + (Y1Max - constrain(DataArray[gx], Y1Min, Y1Max)) / (Y1Max - Y1Min) * gheight;
       //x2 = x_pos + gwidth - gx * gwidth / (readings - 1) + 1; // max_readings is the global variable that sets the maximum data that can be plotted. Increase time left to right
-      x2 = x_pos + (TimeArray[gx] - X1Min) * gwidth / dX; //  Time goes backwards with increasing index.
-      
-      display.drawLine(last_x, last_y,   x2, y2,   GxEPD_BLACK);
-      display.drawLine(last_x, last_y-1, x2, y2-1, GxEPD_BLACK);
-      display.drawLine(last_x, last_y-2, x2, y2-2, GxEPD_BLACK);
+      x2 = x_pos + (TimeArray[gx] - X1Min) * gwidth / (2*dX); //  Time goes backwards with increasing index.
+
+      //Serial.println(String(gx) +" : "+ String(last_x) +" - "+ String(x2) +" "+ String(last_y) +" - "+ String(y2));
+
+      if (line_mode) { // solid line - 3 lines
+        display.drawLine(last_x, last_y,   x2, y2,   GxEPD_BLACK);
+        display.drawLine(last_x, last_y-1, x2, y2-1, GxEPD_BLACK);
+        display.drawLine(last_x, last_y+1, x2, y2+1, GxEPD_BLACK);
+      }
+      else { // dotted line - boxes
+        display.drawLine(x2-1, y2-1,   x2-1, y2+1,   GxEPD_BLACK);        
+        display.drawLine(x2+1, y2-1,   x2+1, y2+1,   GxEPD_BLACK);        
+        display.drawLine(x2-1, y2-1,   x2+1, y2-1,   GxEPD_BLACK);        
+        display.drawLine(x2-1, y2+1,   x2+1, y2+1,   GxEPD_BLACK); 
+      }
 
       // draw x-axis values for extrema, with vertical construction lines.
       if (lhs_flag) { // display time labels:1) below x-axis, 2) for max/min, 3) with date 
@@ -1075,7 +1163,7 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
               for (int j = 0; j < number_of_dashes_up; j++) { // Draw dashed graph grid lines
                 display.drawFastVLine(x2, (y_pos + j * gheight / (number_of_dashes_up - 1)), gheight / (2 * number_of_dashes_up), GxEPD_BLACK);
               }
-              display.drawLine(x2, y_pos + gheight + 2, x2, (y_pos + gheight + 2) + 2, GxEPD_BLACK);
+              display.drawLine(x2, y_pos + gheight + 2, x2, (y_pos + gheight + 2) + 2, GxEPD_BLACK); // xaxis tick
               drawString(x2, y_pos + gheight + 5, ConvertUnixTimeToAxisLabel(TimeArray[gx], true), CENTER); // 26T03:15Z. Add date
         }
       }
@@ -1086,7 +1174,7 @@ void DrawWaterLevelGraph(int x_pos, int y_pos, int gwidth, int gheight, float Y1
               for (int j = 0; j < number_of_dashes_up; j++) { // Draw dashed graph grid lines
                 display.drawFastVLine(x2, (y_pos + j * gheight / (number_of_dashes_up - 1)), gheight / (2 * number_of_dashes_up), GxEPD_BLACK);
               }
-              display.drawLine(x2, y_pos + gheight + 2, x2, (y_pos + gheight +2) - 2, GxEPD_BLACK);
+              display.drawLine(x2, y_pos + gheight + 2, x2, (y_pos + gheight +2) - 2, GxEPD_BLACK); // xaxis tick
               drawString(x2, y_pos + gheight - 10, ConvertUnixTimeToAxisLabel(TimeArray[gx], false), CENTER); // 03:15Z. Don't add date
         }
       }
@@ -1224,27 +1312,12 @@ bool DecodeEA(WiFiClient& json, String Type) {
     Serial.print(F("\nReceiving EA data  - ")); //------------------------------------------------
     JsonArray list                    = root["items"];
 
-    for (byte r = 0; r < max_gauge_readings; r++) {
+    // Data comes in reverse order. Invert to increasing time with increasing index
+    for (int r = 0; r < max_gauge_readings; r++) {
     Serial.println("\nPeriod-" + String(r) + "--------------");
-    LhsGauge[r].Waterlevel    = list[r]["value"].as<float>();                     Serial.println("WaterLevel: "+String(LhsGauge[r].Waterlevel));
-    LhsGauge[r].Timestamp     = ConvertStringToUnixTime(list[r]["dateTime"].as<String>(), "yyy-mm-ddTHH:MM:SSZ");
+    LhsGauge[max_gauge_readings-1-r].Waterlevel    = list[r]["value"].as<float>();                     Serial.println("WaterLevel: "+String(LhsGauge[r].Waterlevel));
+    LhsGauge[max_gauge_readings-1-r].Timestamp     = ConvertStringToUnixTime(list[r]["dateTime"].as<String>(), "yyy-mm-ddTHH:MM:SSZ");
     Serial.println("TimeStamp: " +String(LhsGauge[r].Timestamp) + list[r]["dateTime"].as<String>());
-
-      
-    //LhsGauge[0].Waterlevel      = list[0]["value"].as<float>();                            Serial.println("WaterLevel: "+String(LhsGauge[0].Waterlevel));
-    //LhsGauge[1].Waterlevel      = list[1]["value"].as<float>();                            Serial.println("WaterLevel: "+String(LhsGauge[1].Waterlevel));
-    //// Extract times for local extreme water levels only
-    //LhsGauge[0].Timestamp       = "";                                                      Serial.println("TimeStamp: "+String(LhsGauge[0].Timestamp));
-    //for (byte r = 2; r < max_gauge_readings; r++) {
-    //  Serial.println("\nPeriod-" + String(r) + "--------------");
-    //  LhsGauge[r].Waterlevel      = list[r]["value"].as<float>();                          Serial.println("WaterLevel: "+String(LhsGauge[r].Waterlevel));
-    //  if (   (LhsGauge[r-1].Waterlevel > LhsGauge[r-2].Waterlevel) && (LhsGauge[r-1].Waterlevel > LhsGauge[r].Waterlevel) 
-    //      || (LhsGauge[r-1].Waterlevel < LhsGauge[r-2].Waterlevel) && (LhsGauge[r-1].Waterlevel < LhsGauge[r].Waterlevel)
-    //     ) {  // maxima or minima
-    //    LhsGauge[r-1].Timestamp      = list[r-1]["dateTime"].as<String>();                 Serial.println("TimeStamp: "+String(LhsGauge[r-1].Timestamp));
-    //  }
-    //  else { LhsGauge[r-1].Timestamp      = "";
-    //  }
     }
 
   }
@@ -1253,16 +1326,131 @@ bool DecodeEA(WiFiClient& json, String Type) {
     Serial.println(json);
     Serial.print(F("\nReceiving EA data  - ")); //------------------------------------------------
     JsonArray list                    = root["items"];
-    for (byte r = 0; r < max_gauge_readings; r++) {
+    // Data comes in reverse order. Invert to increasing time with increasing index
+    for (int r = 0; r < max_gauge_readings; r++) {
       Serial.println("\nPeriod-" + String(r) + "--------------");
-      RhsGauge[r].Waterlevel    = list[r]["value"].as<float>();                     Serial.println("WaterLevel: "+String(RhsGauge[r].Waterlevel));
-      RhsGauge[r].Timestamp     = ConvertStringToUnixTime(list[r]["dateTime"].as<String>(), "yyy-mm-ddTHH:MM:SSZ");
+      RhsGauge[max_gauge_readings-1-r].Waterlevel    = list[r]["value"].as<float>();                     Serial.println("WaterLevel: "+String(RhsGauge[r].Waterlevel));
+      RhsGauge[max_gauge_readings-1-r].Timestamp     = ConvertStringToUnixTime(list[r]["dateTime"].as<String>(), "yyy-mm-ddTHH:MM:SSZ");
       Serial.println("TimeStamp: " +String(RhsGauge[r].Timestamp) + list[r]["dateTime"].as<String>());
      
     }
     
   }
   
+  return true;
+}
+//#########################################################################################
+bool obtain_noc_https_data(WiFiClientSecure& client, const String& RequestType, const String& GaugeId) {
+  // This is an https request so requires acknowledgement of certification.
+  
+  client.stop(); // close connection before sending a new request
+
+  String startTime = ConvertUnixTimeToIsoString(NowUnixTime() - 86400); // "2023-12-08T00:00:00Z"
+  String endTime = ConvertUnixTimeToIsoString(NowUnixTime() + 86400); // "2023-12-08T23:59:59Z"
+  // Note, though N days are requested, the api returns all times in the chosen _dates_, which is up to 3 days of data.
+  // 3*96 = 288  15min samples.
+
+  Serial.print(F("NOC start time: "));
+  Serial.println(startTime);
+    
+  String uri = "/api/polpred-api/latest/compute-port?key=" + noc_api_key + "&port_name=" + GaugeId + "&dt_start=" + startTime + "&dt_end=" + endTime + "&interval=15"; // 
+
+  // Opening connection to server (Use 80 as port if HTTP)
+  if (!client.connect(server_noc, 443))
+  {
+    Serial.println(F("Connection failed"));
+    return false;
+  }
+
+  // give the esp a breather
+  yield();
+
+  // Send HTTP request
+  client.print(F("GET "));
+  // This is the second half of a request (everything that comes after the base URL)
+  client.print(uri);
+  client.println(F(" HTTP/1.1"));
+
+  //Headers
+  client.print(F("Host: "));
+  client.println("apps.noc-innovations.co.uk"); // HAD TO HARD WIRE THE BASE URL!! #DEFINE thing "apps.noc..." might have worked
+
+  client.println(F("Cache-Control: no-cache"));
+
+  if (client.println() == 0)
+  {
+    Serial.println(F("Failed to send request"));
+    return false;
+  }
+  //delay(100);
+  // Check HTTP status
+  char status[32] = {0};
+  client.readBytesUntil('\r', status, sizeof(status));
+  if (strcmp(status, "HTTP/1.1 200 OK") != 0)
+  {
+    Serial.print(F("Unexpected response: "));
+    Serial.println(status);
+    return false;
+  }
+
+  // Skip HTTP headers
+  char endOfHeaders[] = "\r\n\r\n";
+  if (!client.find(endOfHeaders))
+  {
+    Serial.println(F("Invalid response"));
+    return false;
+  }
+
+  // CUT AND PASTE THIS HTTPS SOLUTION FROM WEB. DIDN'T TRY WITHOUT THIS while (){}
+  // This is probably not needed for most, but I had issues
+  // with the Tindie api where sometimes there were random
+  // characters coming back before the body of the response.
+  // This will cause no hard to leave it in
+  // peek() will look at the character, but not take it off the queue
+  while (client.available() && client.peek() != '{')
+  {
+    char c = 0;
+    client.readBytes(&c, 1);
+    Serial.print(c);
+    Serial.println("BAD");
+    return false;
+  }
+  // Made it this far then probably OK to decode
+  if (!DecodeNOC(client, RequestType)) return false;
+  client.stop();
+  return true;
+}
+//#########################################################################################
+// Problems with stucturing JSON decodes, see here: https://arduinojson.org/assistant/
+bool DecodeNOC(WiFiClientSecure& json, String Type) {
+  Serial.print(F("\nCreating object...and "));
+  // allocate the JsonDocument
+  DynamicJsonDocument doc(24578); // 3days*15min = 288 calls would need value of 24576. Calculated at: https://arduinojson.org/v6/assistant/#/step3;
+  // Deserialize the JSON document
+  DeserializationError error = deserializeJson(doc, json);
+  // Test if parsing succeeds.
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.c_str());
+    return false;
+  }
+  // convert it to a JsonObject
+  JsonObject root = doc.as<JsonObject>();
+  Serial.println(" Decoding " + Type + " data");
+
+  if (Type == "harmonic") {
+    Serial.println(json);
+    Serial.print(F("\nReceiving NOC data  - ")); //------------------------------------------------
+    JsonArray list                    = root["data"]["items"]; // root["items"];
+
+    for (int r = 0; r < max_harmo_readings; r++) {   // use r as int, as more than 256 values 
+    Serial.println("\nPeriod-" + String(r) + "--------------");
+    LhsForecast[r].Waterlevel    = list[r]["z"].as<float>() + datum_shift;    
+    Serial.println("TideLevel: "+String(LhsForecast[r].Waterlevel));
+    LhsForecast[r].Timestamp     = ConvertStringToUnixTime(list[r]["dt"].as<String>(), "yyy-mm-ddTHH:MM:SSZ");
+    Serial.println("TimeStamp: " +String(LhsForecast[r].Timestamp) + " " + list[r]["dt"].as<String>());
+    }
+  }
   return true;
 }
 //#########################################################################################
@@ -1327,6 +1515,19 @@ String ConvertUnixTimeToAxisLabel(int unix_time, bool bool_add_day) {
   return output;
 }
 //#########################################################################################
+String ConvertUnixTimeToIsoString(int unix_time) {
+  /*   Convert unixtime (int seconds) to ISO time of format 2023-10-25T12:00:00Z
+   *   
+   *  Example usage:
+   * NowUnixTime() --> 1698235200
+   * ConvertUnixTimeToIsoString(1698235200)  --> 2023-10-25T12:00:00Z
+  */
+  time_t tm = unix_time;
+  struct tm *now_tm = gmtime(&tm);
+  char output[21];
+  strftime(output, sizeof(output), "%Y-%m-%dT%H:%M:%SZ", now_tm);
+  return output;
+}//#########################################################################################
 
 long NowUnixTime() {
   /*   Convert time now to unix time (int).
@@ -1335,8 +1536,8 @@ long NowUnixTime() {
    *      "dt":1698235200 <--> "2023-10-25 12:00:00"
    *   
    *  Example usage:
-   * NowToUnixTime() --> 1698235200
-   * ConvertUnixTime(1698235200)  --> 2023-10-25T12:00:00Z, though in different format
+   * NowUnixTime() --> 1698235200
+   * ConvertUnixTimeToIsoString(1698235200)  --> 2023-10-25T12:00:00Z
   */
 
   struct tm now_utc;
@@ -1436,4 +1637,8 @@ long NowUnixTime() {
  Nov 2023
    1. Write ConvertStringToUnixTime(), NowUnixTime(), ConvertUnixTimeToAxisLabel() methods
    2. Store gauge time data in unixseconds. Plot on harmonised time axis  
+
+ Jan 2024
+   1. Add HTTPS api handling call to recover harmonic timeseries data. obtain_noc_https_data()
+   2. Simplification of wind data (and further layout modifications) to make space for waterlevel timeseries data
 */
