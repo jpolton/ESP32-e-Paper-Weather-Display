@@ -1,4 +1,9 @@
-Modifications to parent respository include
+Modifications include (Jan'24)
+Additional time series graph for harmonic prediction (Call to apps.noc-innovations.co.uk server with https)
+Rearranging to make space (making the wind data more compact)
+![Screenshot 2024-01-12 at 22.30.36.png](..%2F..%2FDesktop%2FScreenshot%202024-01-12%20at%2022.30.36.png)
+
+Modifications to parent respository (Nov'23) include
 <img width="1081" alt="Screenshot 2023-11-18 at 20 33 03" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/42e3b4b5-282e-4311-ad63-d12a3fd8a248">
 **update** units in temperature box "deg C" or "deg F" modified so degree symbol is only in the inset box (image not updated)
 
