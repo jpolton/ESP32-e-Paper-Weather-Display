@@ -1,20 +1,36 @@
-Modifications include (Jan'24)
+# ESP32-e-Paper-Weather-Display
 
-* Timeseries graph has two tidal timeseries on the left hand axis, corresponding to the same location: 
-   1) Environment Agency measured water levels (solid) for last 24hrs
-   2) National Oceanography Centre tidal prediction (dashed) for +/- 24hrs
-* Timeseries graph has an independent timeseries on right hand axis - measured data from Environment Agency api. Here a river.
-* Method to obtain and process the National Oceanogaphy Centre required modifications to accomodate api calls over HTTPS
-* Rearranging to make space (making the wind data more compact)
-<img width="1053" alt="Screenshot 2024-01-12 at 22 30 36" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/c08095e1-9f55-48dd-a5c3-dabfa6a76807">
+### NOTE: ###
+April 2024
 
-Modifications to parent respository (Nov'23) include
-<img width="1081" alt="Screenshot 2023-11-18 at 20 33 03" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/42e3b4b5-282e-4311-ad63-d12a3fd8a248">
-**update** units in temperature box "deg C" or "deg F" modified so degree symbol is only in the inset box (image not updated)
+From June 2024 you may have to pay for API (Wx Data) access. You will need to add a payment method to your account, so that OWM can charge you should you exceed 1000 calls/day.
+Also the API call in the source code may need to be changed from /2.5/ to /3.0/ as yet details are unknown, my best guess is:
+http://api.openweathermap.org/data/2.5/weather?q=Melksham,UK&APPID=your_OWM_API_key&mode=json&units=metric&cnt=1
+Becomes:
+http://api.openweathermap.org/data/**3.0**/weather?q=Melksham,UK&APPID=your_OWM_API_key&mode=json&units=metric&cnt=1
+#############
+
+### API ### 
+April 2024
+
+OpenWeatherMap have depreciated City names and now calls to their API need to includeLatitude and Longitude data.
+The examples have been updated to include LAT and LON variables in the credentials file and the associate API Call in Common.h has been modified to use the new format.
+This is the new format:
+https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API key}
+
+ALSO NOTE: Most of the API 2.5 calls will still function, only those to the ONECALL variant will fail from June 2024
+#############
+
+### FONTS ###
+April 2024
+
+If you wish to use extended font characters for language accents, then simply change all instances of a Font selection in the source code from:
+u8g2_font_helvB08_tf
+to:
+u8g2_font_helvB08_t**e**
+#############
 
 
-# Original Readme
-## ESP32-e-Paper-Weather-Display
 An ESP32 and an ePaper Display reads [Open Weather Map](https://openweathermap.org/) and displays the weather
 
 For standalone use, download the ZIP file to your desktop.
