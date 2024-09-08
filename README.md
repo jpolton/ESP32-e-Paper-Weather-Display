@@ -1,4 +1,20 @@
-# ESP32-e-Paper-Weather-Display
+Modifications include (Jan'24)
+
+* Timeseries graph has two tidal timeseries on the left hand axis, corresponding to the same location: 
+   1) Environment Agency measured water levels (solid) for last 24hrs
+   2) National Oceanography Centre tidal prediction (dashed) for +/- 24hrs
+* Timeseries graph has an independent timeseries on right hand axis - measured data from Environment Agency api. Here a river.
+* Method to obtain and process the National Oceanogaphy Centre required modifications to accomodate api calls over HTTPS
+* Rearranging to make space (making the wind data more compact)
+<img width="1053" alt="Screenshot 2024-01-12 at 22 30 36" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/c08095e1-9f55-48dd-a5c3-dabfa6a76807">
+
+Modifications to parent respository (Nov'23) include
+<img width="1081" alt="Screenshot 2023-11-18 at 20 33 03" src="https://github.com/jpolton/ESP32-e-Paper-Weather-Display/assets/22616872/42e3b4b5-282e-4311-ad63-d12a3fd8a248">
+**update** units in temperature box "deg C" or "deg F" modified so degree symbol is only in the inset box (image not updated)
+
+
+# Original Readme
+## ESP32-e-Paper-Weather-Display
 
 ### NOTE: ###
 April 2024
