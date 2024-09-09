@@ -612,8 +612,8 @@ void DisplayStatusSection(int x, int y, int rssi) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   //drawString(x, y - 29, TXT_WIFI, CENTER);
   //drawString(x + 68, y - 30, TXT_POWER, CENTER);
-  DrawRSSI(x - 12, y + 10, rssi);
-  DrawBattery(x + 30, y + 6);;
+  DrawRSSI(x + 35, y + 10, rssi);
+  DrawBattery(x - 45, y + 13);
 }
 //#########################################################################################
 void DrawRSSI(int x, int y, int rssi) {
@@ -680,7 +680,7 @@ boolean UpdateLocalTime() {
 //#########################################################################################
 void DrawBattery(int x, int y) {
   uint8_t percentage = 100;
-  float voltage = analogRead(35) / 4096.0 * 3.99; //7.46;
+  float voltage = analogRead(35) / 4096.0 * 6.94; //3.99; //7.46;
   if (voltage > 1 ) { // Only display if there is a valid reading
     Serial.println("Voltage = " + String(voltage));
     percentage = 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
@@ -690,7 +690,8 @@ void DrawBattery(int x, int y) {
     display.fillRect(x + 34, y - 10, 2, 5, GxEPD_BLACK);
     display.fillRect(x + 17, y - 10, 15 * percentage / 100.0, 6, GxEPD_BLACK);
     drawString(x + 10, y - 11, String(percentage) + "%", RIGHT);
-    drawString(x + 13, y + 5,  String(voltage, 2) + "v", CENTER);
+    //drawString(x + 13, y + 5,  String(voltage, 2) + "v", CENTER);
+    drawString(x + 40, y - 11,  String(voltage, 2) + "v", LEFT);
   }
 }
 //#########################################################################################
