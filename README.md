@@ -1,6 +1,7 @@
 Modifications include (Sep'24)
 
 * improved placement of battery indicator for these modifications. (I used a 2x 100kOhm voltage divider on GIOP35 = pin6 = ADC7). 
+<img width="1271" alt="Screenshot 2024-09-09 at 20 36 47" src="https://github.com/user-attachments/assets/0ae34d7a-42f5-4451-9653-2b24da5b5ba7">
 
 Modifications include (Jan'24)
 
