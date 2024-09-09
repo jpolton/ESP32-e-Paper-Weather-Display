@@ -1,3 +1,7 @@
+Modifications include (Sep'24)
+
+* improved placement of battery indicator for these modifications. (I used a 2x 100kOhm voltage divider on GIOP35 = pin6 = ADC7). 
+
 Modifications include (Jan'24)
 
 * Timeseries graph has two tidal timeseries on the left hand axis, corresponding to the same location: 
