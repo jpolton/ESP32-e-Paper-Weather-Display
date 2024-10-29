@@ -22,9 +22,9 @@
 #include <WiFi.h>                     // Built-in
 #include "time.h"                     // Built-in
 #include <SPI.h>                      // Built-in 
-#include <esp_crt_bundle.h>
+//#include <esp_crt_bundle.h>  // REMOVE
 #include <WiFiClientSecure.h>
-#include <ssl_client.h>
+//#include <ssl_client.h>  //REMOVE
 #define  ENABLE_GxEPD2_display 1
 #include <GxEPD2_BW.h>
 //#include <GxEPD2_3C.h>
@@ -136,26 +136,26 @@ void setup() {
   if (StartWiFi() == WL_CONNECTED && SetupTime() == true) {
     if (CurrentHour >= WakeupTime && CurrentHour <= SleepTime) {
       InitialiseDisplay(); // Give screen time to initialise by getting weather data!
-      byte Attempts = 1;
       bool RxWeather = false, RxForecast = false, RxGaugeLhs = false, RxGaugeRhs = false, RxHarmonicLhs = false;
+      
       WiFiClient client;   // wifi client object for HTTP
-
+      byte Attempts = 1;
       while ((RxWeather == false || RxForecast == false) && Attempts <= 2) { // Try up-to 2 time for Weather and Forecast data
         if (RxWeather  == false) RxWeather  = obtain_wx_data(client, "weather");
         if (RxForecast == false) RxForecast = obtain_wx_data(client, "forecast");
         Attempts++;
       }
+      WiFiClientSecure client_https;   // wifi client object for HTTPS
+      client_https.setInsecure();
       Attempts = 1; // reset
       while ((RxGaugeLhs == false || RxGaugeRhs == false) && Attempts <= 2) { // Try up-to 2 time for EA data
-        if (RxGaugeLhs  == false) RxGaugeLhs = obtain_ea_data(client, "tide", gauge_id_lhs);
-        if (RxGaugeRhs  == false) RxGaugeRhs = obtain_ea_data(client, "river", gauge_id_rhs);
+        if (RxGaugeLhs  == false) RxGaugeLhs = obtain_ea_data(client_https, "tide", gauge_id_lhs);
+        if (RxGaugeRhs  == false) RxGaugeRhs = obtain_ea_data(client_https, "river", gauge_id_rhs);
         Attempts++;
       }
       Attempts = 1; // reset
-      WiFiClientSecure client_https;   // wifi client object for HTTPS
-      client_https.setInsecure();
       while ((RxHarmonicLhs == false) && Attempts <= 2) { // Try up-to 2 time for forecast (harmonic) data
-        if (RxHarmonicLhs  == false) RxHarmonicLhs = obtain_noc_https_data(client_https, "harmonic", gauge_forecast_id_lhs);
+        if (RxHarmonicLhs  == false) RxHarmonicLhs = obtain_noc_data(client_https, "harmonic", gauge_forecast_id_lhs);
         Attempts++;
       }      
       if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs && RxHarmonicLhs) { // Only proceed if received all Weather, Forecast, both Gauge data and harmonic data
@@ -179,9 +179,13 @@ void BeginSleep() {
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
-  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep time");
-  Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Starting deep-sleep period...");
+  Serial.print(F("Entering "));
+  Serial.print(String(SleepTimer));
+  Serial.println(F("-secs of sleep time"));
+  Serial.print(F("Awake for : "));
+  Serial.print(String((millis() - StartTime) / 1000.0, 3));
+  Serial.println(F("-secs"));
+  Serial.println(F("Starting deep-sleep period..."));
   esp_deep_sleep_start();      // Sleep for e.g. 30 minutes
 }
 //#########################################################################################
@@ -531,7 +535,8 @@ void DisplayForecastSection(int x, int y) {
 }
 //#########################################################################################
 void DisplayConditionsSection(int x, int y, String IconName, bool IconSize) {
-  Serial.println("Icon name: " + IconName);
+  Serial.print(F("Icon name: "));
+  Serial.println(IconName);
   if      (IconName == "01d" || IconName == "01n")  Sunny(x, y, IconSize, IconName);
   else if (IconName == "02d" || IconName == "02n")  MostlySunny(x, y, IconSize, IconName);
   else if (IconName == "03d" || IconName == "03n")  Cloudy(x, y, IconSize, IconName);
@@ -573,7 +578,7 @@ void arrow(int x, int y, int asize, float aangle, int pwidth, int plength) {
 }
 //#########################################################################################
 uint8_t StartWiFi() {
-  Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
+  Serial.print(F("\r\nConnecting to: ")); Serial.println(String(ssid));
   IPAddress dns(8, 8, 8, 8); // Google DNS
   WiFi.disconnect();
   WiFi.mode(WIFI_STA); // switch off AP
@@ -594,9 +599,10 @@ uint8_t StartWiFi() {
   }
   if (connectionStatus == WL_CONNECTED) {
     wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
-    Serial.println("WiFi connected at: " + WiFi.localIP().toString());
+    Serial.print(F("WiFi connected at: "));
+    Serial.println(WiFi.localIP().toString());
   }
-  else Serial.println("WiFi connection *** FAILED ***");
+  else Serial.println(F("WiFi connection *** FAILED ***"));
   return connectionStatus;
 }
 //#########################################################################################
@@ -1264,17 +1270,19 @@ void InitialiseDisplay() {
   display.setFullWindow();
 }
 //#########################################################################################
-bool obtain_ea_data(WiFiClient& client, const String& RequestType, const String& GaugeId) {
+bool obtain_ea_data(WiFiClientSecure& client, const String& RequestType, const String& GaugeId) {
   const String units = (Units == "M" ? "metric" : "imperial");
   client.stop(); // close connection before sending a new request
   HTTPClient http;
   String uri = "/flood-monitoring/id/stations/" + GaugeId + "/readings?_sorted&_limit=96";  // 96 = 24hr at 15mins interval  
 
   //http.begin(uri,test_root_ca); //HTTPS example connection
-  http.begin(client, server_ea, 80, uri);
-  int httpCode = http.GET();
-  if(httpCode == HTTP_CODE_OK) {
-    if (!DecodeEA(http.getStream(), RequestType)) return false;
+  http.begin(client, server_ea, 443, uri); // Initialize secure HTTPClient
+  
+  int httpCode = http.GET(); // Send GET request
+
+  if(httpCode == HTTP_CODE_OK) { 
+    if (!DecodeEA(http.getString(), RequestType)) return false;
     client.stop();
     http.end();
     return true;
@@ -1291,7 +1299,7 @@ bool obtain_ea_data(WiFiClient& client, const String& RequestType, const String&
 }
 //#########################################################################################
 // Problems with stucturing JSON decodes, see here: https://arduinojson.org/assistant/
-bool DecodeEA(WiFiClient& json, String Type) {
+bool DecodeEA(String json, String Type) {
   Serial.print(F("\nCreating object...and "));
   // allocate the JsonDocument
   DynamicJsonDocument doc(49152); // 24*4=96 calls. Calculated at: https://arduinojson.org/v6/assistant/#/step3;
@@ -1340,9 +1348,7 @@ bool DecodeEA(WiFiClient& json, String Type) {
   return true;
 }
 //#########################################################################################
-bool obtain_noc_https_data(WiFiClientSecure& client, const String& RequestType, const String& GaugeId) {
-  // This is an https request so requires acknowledgement of certification.
-  
+bool obtain_noc_data(WiFiClientSecure& client, const String& RequestType, const String& GaugeId) {  //JEFF
   client.stop(); // close connection before sending a new request
 
   String startTime = ConvertUnixTimeToIsoString(NowUnixTime() - 86400); // "2023-12-08T00:00:00Z"
@@ -1352,77 +1358,36 @@ bool obtain_noc_https_data(WiFiClientSecure& client, const String& RequestType, 
 
   Serial.print(F("NOC start time: "));
   Serial.println(startTime);
-    
+
   String uri = "/api/polpred-api/latest/compute-port?key=" + noc_api_key + "&port_name=" + GaugeId + "&dt_start=" + startTime + "&dt_end=" + endTime + "&interval=15"; // 
 
-  // Opening connection to server (Use 80 as port if HTTP)
-  if (!client.connect(server_noc, 443))
-  {
-    Serial.println(F("Connection failed"));
-    return false;
+  HTTPClient http;
+
+  //http.begin(uri,test_root_ca); //HTTPS example connection
+  http.begin(client, server_noc, 443, uri); // Initialize HTTPClient JEFF
+
+  int httpCode = http.GET(); // Send GET request
+  Serial.println("httpCode: " + String(httpCode));
+
+  if(httpCode == HTTP_CODE_OK ){
+    if (!DecodeNOC(http.getString(), RequestType)) return false; // http.getSteam() worked with 12
+    client.stop();
+    http.end();
+    return true;
   }
-
-  // give the esp a breather
-  yield();
-
-  // Send HTTP request
-  client.print(F("GET "));
-  // This is the second half of a request (everything that comes after the base URL)
-  client.print(uri);
-  client.println(F(" HTTP/1.1"));
-
-  //Headers
-  client.print(F("Host: "));
-  client.println("apps.noc-innovations.co.uk"); // HAD TO HARD WIRE THE BASE URL!! #DEFINE thing "apps.noc..." might have worked
-
-  client.println(F("Cache-Control: no-cache"));
-
-  if (client.println() == 0)
+  else
   {
-    Serial.println(F("Failed to send request"));
-    return false;
+    Serial.printf("connection failed, error: %s", http.errorToString(httpCode).c_str());
+    client.stop();
+    http.end();
+    return false; //false; 19Oct24: when false no updating happens if EA fails to return data. if true just skips EA data
   }
-  //delay(100);
-  // Check HTTP status
-  char status[32] = {0};
-  client.readBytesUntil('\r', status, sizeof(status));
-  if (strcmp(status, "HTTP/1.1 200 OK") != 0)
-  {
-    Serial.print(F("Unexpected response: "));
-    Serial.println(status);
-    return false;
-  }
-
-  // Skip HTTP headers
-  char endOfHeaders[] = "\r\n\r\n";
-  if (!client.find(endOfHeaders))
-  {
-    Serial.println(F("Invalid response"));
-    return false;
-  }
-
-  // CUT AND PASTE THIS HTTPS SOLUTION FROM WEB. DIDN'T TRY WITHOUT THIS while (){}
-  // This is probably not needed for most, but I had issues
-  // with the Tindie api where sometimes there were random
-  // characters coming back before the body of the response.
-  // This will cause no hard to leave it in
-  // peek() will look at the character, but not take it off the queue
-  while (client.available() && client.peek() != '{')
-  {
-    char c = 0;
-    client.readBytes(&c, 1);
-    Serial.print(c);
-    Serial.println("BAD");
-    return false;
-  }
-  // Made it this far then probably OK to decode
-  if (!DecodeNOC(client, RequestType)) return false;
-  client.stop();
+  http.end();
   return true;
 }
 //#########################################################################################
 // Problems with stucturing JSON decodes, see here: https://arduinojson.org/assistant/
-bool DecodeNOC(WiFiClientSecure& json, String Type) {
+bool DecodeNOC(String json, String Type) {
   Serial.print(F("\nCreating object...and "));
   // allocate the JsonDocument
   DynamicJsonDocument doc(24578); // 3days*15min = 288 calls would need value of 24576. Calculated at: https://arduinojson.org/v6/assistant/#/step3;
@@ -1641,4 +1606,8 @@ long NowUnixTime() {
  Jan 2024
    1. Add HTTPS api handling call to recover harmonic timeseries data. obtain_noc_https_data()
    2. Simplification of wind data (and further layout modifications) to make space for waterlevel timeseries data
+
+ Oct 2024
+  1. Use HTTPS api handling for new EA server.
+  2. Streamline EA and NOC api calls with neater https methods. Rename: obtain_noc_https_data() --> obtain_noc_data()
 */
