@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 typedef struct { // For measured river levels. EA gauges at first instance
-  String   Timestamp;
+  long     Timestamp;
   float    Waterlevel;
 } Gauge_record_type;
 
