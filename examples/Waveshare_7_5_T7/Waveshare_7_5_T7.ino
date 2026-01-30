@@ -158,7 +158,8 @@ void setup() {
         if (RxHarmonicLhs  == false) RxHarmonicLhs = obtain_noc_data(client_https, "harmonic", gauge_forecast_id_lhs);
         Attempts++;
       }      
-      if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs && RxHarmonicLhs) { // Only proceed if received all Weather, Forecast, both Gauge data and harmonic data
+      //if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs && RxHarmonicLhs) { // Only proceed if received all Weather, Forecast, both Gauge data and harmonic data
+      if (RxWeather && RxForecast && RxGaugeLhs && RxGaugeRhs ) { // Only proceed if received all Weather, Forecast, both Gauge data data
         StopWiFi(); // Reduces power consumption
         DisplayWeather();
         display.display(false); // Full screen update mode
@@ -171,7 +172,7 @@ void setup() {
 void loop() { // this will never run!
 }
 //#########################################################################################
-void BeginSleep() {
+void BeginSleep_old() {
   display.powerOff();
   long SleepTimer = (SleepDuration * 60 - ((CurrentMin % SleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
   esp_sleep_enable_timer_wakeup((SleepTimer+20) * 1000000LL); // Added extra 20-secs of sleep to allow for slow ESP32 RTC timers
@@ -187,6 +188,18 @@ void BeginSleep() {
   Serial.println(F("-secs"));
   Serial.println(F("Starting deep-sleep period..."));
   esp_deep_sleep_start();      // Sleep for e.g. 30 minutes
+}
+//#########################################################################################
+void BeginSleep() {
+  display.powerOff();
+  // Get current epoch right now (not earlier in setup)
+  time_t now; time(&now);
+  // Next boundary at :00 or :30
+  const time_t nextBoundary = (now / 1800) * 1800 + 1800; // 1800 = 30*60
+  const uint64_t sleep_us = (uint64_t)(nextBoundary - now) * 1000000ULL;
+  Serial.printf("Sleeping for %ld s to boundary (epoch %ld)\n", (long)(nextBoundary - now), (long)nextBoundary);
+  esp_sleep_enable_timer_wakeup(sleep_us);
+  esp_deep_sleep_start();
 }
 //#########################################################################################
 void DisplayWeather() {                        // 7.5" e-paper display is 800x480 resolution
@@ -223,9 +236,12 @@ void DisplayMainWeatherSection(int x, int y) {
   //  display.drawRect(x-67, y-65, 140, 182, GxEPD_BLACK);
   display.drawLine(0, 38, SCREEN_WIDTH - 3, 38,  GxEPD_BLACK);
   DisplayConditionsSection(86, 149, WxConditions[0].Icon, LargeIcon);
-  DisplayDisplayWindSectionSmall(x + 20, y - 81, WxConditions[0].Winddir, WxConditions[0].Windspeed, 137, 100);
-  DisplayTemperatureSection(x + 154, y - 81, 137, 100);
-  DisplayPressureSection(x + 281, y - 81, WxConditions[0].Pressure, WxConditions[0].Trend, 137, 100);
+  //DisplayDisplayWindSectionSmall(x + 20, y - 81, WxConditions[0].Winddir, WxConditions[0].Windspeed, 137, 100);
+  //DisplayTemperatureSection(x + 154, y - 81, 137, 100);
+  //DisplayPressureSection(x + 281, y - 81, WxConditions[0].Pressure, WxConditions[0].Trend, 137, 100);
+  DisplayTemperatureSection(x + 20, y - 81, 137, 100);
+  DisplayPressureSection(x + 154, y - 81, WxConditions[0].Pressure, WxConditions[0].Trend, 137, 100);
+  DisplayDisplayWindSectionSmall(x + 281, y - 81, WxConditions[0].Winddir, WxConditions[0].Windspeed, 137, 100);
   DisplayPrecipitationSection(x + 411, y - 81, 137, 100);
   //DisplayForecastTextSection(x + 97, y + 20, 409, 65);
   DisplayGaugeSection(x - 109, y + 20, 409-20+97+109, 65 + 61 + 10+20);
@@ -1610,4 +1626,7 @@ long NowUnixTime() {
  Oct 2024
   1. Use HTTPS api handling for new EA server.
   2. Streamline EA and NOC api calls with neater https methods. Rename: obtain_noc_https_data() --> obtain_noc_data()
+
+Jan 2026
+  1. Edit BeginSleep() to make timing more precise and avoid missing refreshes when they take more than 30s
 */
